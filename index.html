@@ -862,13 +862,20 @@
         /**
          * Inicializa el JUEGO completo, reseteando puntuación y vidas.
          */
-        function iniciarJuego() {
-            initializeAudio();
+       function iniciarJuego() {
+    // 🔊 Asegura que el audio se inicie con interacción del usuario
+    if (typeof Tone !== "undefined") {
+        Tone.start().then(() => {
+            console.log("Audio activado por el usuario");
+        });
+    }
 
-            score = 0;
-            lives = 3;
-            iniciarRonda(false);
-        }
+    initializeAudio();
+    score = 0;
+    lives = 3;
+    iniciarRonda(false);
+}
+
 
         /**
          * Implementa el botón de pista. Muestra la fórmula del siguiente múltiplo
@@ -1334,4 +1341,5 @@
 
 </body>
 </html>
+
 
