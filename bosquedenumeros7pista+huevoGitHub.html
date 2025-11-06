@@ -1,0 +1,1336 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bosque de Números: El Juego de las Tablas</title>
+    <link rel="manifest" href="manifest.json">
+    <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("service-worker.js")
+          .then(() => console.log("Service Worker registrado correctamente."))
+          .catch((err) => console.error("Error al registrar Service Worker:", err));
+      });
+    }
+    <!-- Incluimos Tone.js para la generación de sonido -->
+    <script src="https://cdn.jsdelivr.net/npm/tone@14.7.58/build/Tone.min.js"></script>
+    
+    <style>
+        /* Estilos generales y fuente temática */
+        @import url('https://fonts.googleapis.com/css2?family=Crete+Round:ital@0;0;0&family=Varela+Round&display=swap');
+
+        :root {
+            --color-fondo-bosque: #F7EFE5;
+            --color-tierra: #8B4513;
+            --color-hoja-oscura: #228B22;
+            --color-hoja-clara: #3CB371;
+            --color-madera: #D2B48C;
+            --color-texto: #333;
+            --color-vida: #D9534F;
+            --color-acierto: #5CB85C;
+            --color-error: #D9534F;
+            --color-racha: #FFD700; /* Oro para la racha */
+            --color-tablas: #007bff; /* Azul para el contador de tablas */
+        }
+
+        body {
+            font-family: 'Varela Round', sans-serif;
+            background-color: var(--color-tierra);
+            color: var(--color-texto);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Cpath fill='%23703816' fill-opacity='0.2' d='M0 0h20v20H0zM20 20h20v20H20z'/%3E%3C/svg%3E");
+        }
+
+        .contenedor-juego {
+            background-color: var(--color-fondo-bosque);
+            border: 10px solid var(--color-madera);
+            border-radius: 20px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4), 
+                        inset 0 0 15px rgba(139, 69, 19, 0.5);
+            padding: 30px;
+            width: 95%;
+            max-width: 600px;
+            text-align: center;
+        }
+
+        h1 {
+            font-family: 'Crete Round', serif;
+            font-size: 2.5rem;
+            color: var(--color-hoja-oscura);
+            text-shadow: 2px 2px 0 var(--color-hoja-clara);
+            margin-bottom: 20px;
+        }
+
+        /* Área de Controles */
+        .controles {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .controles label, .controles select, .controles button {
+            font-size: 1rem;
+        }
+
+        select {
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 2px solid var(--color-hoja-oscura);
+            background-color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+            max-width: 280px; 
+        }
+
+        select:focus {
+            outline: none;
+            border-color: var(--color-hoja-clara);
+            box-shadow: 0 0 0 3px rgba(60, 179, 113, 0.5);
+        }
+
+        .boton-iniciar {
+            background-color: var(--color-hoja-oscura);
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            box-shadow: 0 5px 0 var(--color-tierra);
+            transition: all 0.15s ease-in-out;
+            white-space: nowrap; /* Evita que el texto se rompa */
+        }
+
+        .boton-iniciar:hover {
+            background-color: var(--color-hoja-clara);
+            box-shadow: 0 3px 0 var(--color-tierra);
+            transform: translateY(2px);
+        }
+
+        .boton-iniciar:disabled {
+            background-color: #aaa;
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
+
+        /* Tablero del Bosque */
+        .tablero-numeros {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            margin: 20px auto;
+            max-width: 450px;
+            background-color: var(--color-madera);
+            padding: 10px;
+            border-radius: 15px;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .celda-numero {
+            background-color: var(--color-hoja-clara);
+            color: white;
+            padding: 15px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            border-radius: 10px;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.1s ease-out;
+            border: 3px solid var(--color-hoja-oscura);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            aspect-ratio: 1 / 1; 
+            transform: scale(1);
+        }
+
+        .celda-numero:hover:not(.acertado):not(.incorrecto):not(.deshabilitado) {
+            background-color: var(--color-hoja-oscura);
+            box-shadow: 0 0 15px rgba(60, 179, 113, 0.8);
+        }
+
+        /* Estados de las celdas */
+        .celda-numero.acertado {
+            background-color: var(--color-acierto);
+            border-color: #3C763D;
+            cursor: default;
+            opacity: 0.7;
+            pointer-events: none;
+            animation: bounceIn 0.3s;
+        }
+        
+        .celda-numero.incorrecto {
+            background-color: var(--color-error);
+            border-color: #A94442;
+            animation: shake 0.5s;
+        }
+
+        .celda-numero.deshabilitado {
+            cursor: not-allowed;
+            opacity: 0.5;
+            pointer-events: none;
+        }
+        
+        /* ESTILO PARA EL HUEVO DE PASCUA: CELDAS ILUMINADAS Y MARCADOR */
+        .programmer-activated {
+            background-color: #fce303 !important; /* Amarillo neón */
+            color: #1a202c !important; 
+            border-color: #fce303 !important;
+            animation: pulse-dev 0.5s 6 alternate; /* Parpadeo de 3 segundos */
+        }
+        @keyframes pulse-dev {
+            from { box-shadow: 0 0 5px #fce303; transform: scale(1); }
+            to { box-shadow: 0 0 15px #fce303; transform: scale(1.05); }
+        }
+
+
+        /* Marcador y Vidas */
+        .marcador {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap; 
+            margin-bottom: 20px;
+            font-size: 1.1rem;
+            background-color: var(--color-madera);
+            padding: 10px;
+            border-radius: 10px;
+            box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2);
+            border: 2px solid var(--color-tierra);
+        }
+
+        .marcador > div {
+            background-color: #ffffff; 
+            padding: 10px 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin: 5px; 
+            flex-grow: 1; 
+            min-width: 100px; 
+            transition: all 0.3s; /* Para el efecto de parpadeo */
+        }
+        
+        /* Estilos vistosos para Tabla y Puntos */
+        #marcador-puntos, #marcador-tabla {
+            font-family: 'Crete Round', serif;
+            font-size: 1.3rem; 
+            color: var(--color-hoja-oscura); 
+            font-weight: bold;
+            border: 3px solid var(--color-hoja-clara);
+            box-shadow: 0 0 12px rgba(60, 179, 113, 0.5); 
+        }
+        
+        /* Marcador de Tablas Realizadas (Target del Easter Egg) */
+        #marcador-tablas-realizadas {
+            font-family: 'Crete Round', serif;
+            font-size: 1.3rem; 
+            color: var(--color-tablas); 
+            font-weight: bold;
+            border: 3px solid var(--color-tablas);
+            box-shadow: 0 0 12px rgba(0, 123, 255, 0.5);
+            cursor: pointer; /* Para indicar que es interactivo */
+        }
+        
+        /* Marcador de Racha */
+        #marcador-racha {
+            font-family: 'Crete Round', serif;
+            font-size: 1.3rem; 
+            color: var(--color-racha); 
+            font-weight: bold;
+            border: 3px solid var(--color-racha);
+            background-color: #333;
+            box-shadow: 0 0 12px rgba(255, 215, 0, 0.8);
+            text-shadow: 1px 1px 2px black;
+        }
+        
+        /* Icono de Racha de Fuego */
+        .fuego-racha {
+            display: inline-block;
+            margin-left: 5px;
+            animation: pulseFire 1s infinite alternate;
+        }
+        
+        @keyframes pulseFire {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(1.1); opacity: 1; }
+        }
+
+
+        #marcador-record {
+            font-weight: bold;
+            color: var(--color-vida); 
+            background-color: #fff5f5; 
+            border: 3px solid var(--color-vida);
+        }
+
+
+        .vida-icon {
+            color: var(--color-vida);
+            font-size: 1.5rem;
+            margin-left: 5px;
+        }
+        
+        /* Mensajes */
+        .mensaje {
+            min-height: 40px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--color-texto);
+            margin-top: 15px;
+        }
+        
+        /* Estilos del Indicador de Múltiplos */
+        .multiples-indicador {
+            margin: 15px auto 0;
+            padding: 10px;
+            background-color: #E0EEDA; 
+            border-radius: 10px;
+            max-width: 550px; 
+            font-size: 1rem;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px; 
+            border: 1px dashed var(--color-hoja-clara);
+        }
+
+        .multiple-item {
+            padding: 5px 8px;
+            border-radius: 5px;
+            white-space: nowrap;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+
+        .multiple-item.found {
+            background-color: var(--color-acierto);
+            color: white;
+        }
+
+        .multiple-item.missing {
+            background-color: #f0f0f0;
+            color: var(--color-texto);
+        }
+
+        /* Contenedor del Modal (para Game Over/Win) */
+        .modal {
+            display: none; 
+            position: fixed;
+            z-index: 100;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden; 
+            background-color: rgba(0,0,0,0.4);
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-contenido {
+            background-color: var(--color-fondo-bosque);
+            margin: 15% auto; 
+            padding: 30px;
+            border: 8px solid var(--color-hoja-oscura);
+            border-radius: 15px;
+            width: 80%;
+            max-width: 400px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            
+            /* Contenedor flexible para los botones de Pro */
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .modal-contenido h2 {
+            font-family: 'Crete Round', serif;
+            color: var(--color-hoja-oscura);
+            font-size: 2rem;
+            margin-bottom: 15px;
+        }
+
+        .modal-contenido p {
+            font-size: 1.1rem;
+            margin-bottom: 20px;
+        }
+
+        .modal-botones-pro button {
+            background-color: var(--color-hoja-clara);
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            font-size: 1rem;
+            width: 100%;
+            margin-bottom: 10px;
+            box-shadow: 0 4px 0 var(--color-hoja-oscura);
+        }
+        
+        .modal-botones-pro button:hover {
+            background-color: var(--color-hoja-oscura);
+            box-shadow: 0 2px 0 var(--color-hoja-oscura);
+            transform: translateY(2px);
+        }
+        
+        .modal-botones-pro {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        /* Botón de reinicio estándar */
+        #boton-reiniciar-estandar {
+            background-color: var(--color-hoja-clara);
+            color: white;
+            padding: 10px 25px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            font-size: 1rem;
+            box-shadow: 0 4px 0 var(--color-hoja-oscura);
+        }
+        
+        #boton-reiniciar-estandar:hover {
+            background-color: var(--color-hoja-oscura);
+            box-shadow: 0 2px 0 var(--color-hoja-oscura);
+            transform: translateY(2px);
+        }
+        
+
+        /* Animaciones */
+        @keyframes shake {
+            0%, 100% {transform: translateX(0);}
+            20%, 60% {transform: translateX(-5px);}
+            40%, 80% {transform: translateX(5px);}
+        }
+        
+        @keyframes bounceIn {
+            0% { transform: scale(0.5); opacity: 0; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(1); }
+        }
+
+        /* Animación de Estrellas/Confeti de Victoria */
+        @keyframes sparkle {
+            0% { 
+                transform: translate(0, 0) scale(1) rotate(0deg); 
+                opacity: 1; 
+                box-shadow: 0 0 10px var(--color-racha);
+            }
+            100% { 
+                transform: translate(var(--tx), var(--ty)) scale(0) rotate(var(--r)); 
+                opacity: 0; 
+            }
+        }
+
+        .star-particle {
+            position: fixed; 
+            width: 8px; 
+            height: 8px; 
+            background-color: var(--color-racha); 
+            border-radius: 50%;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 101; 
+            animation: sparkle 1.5s ease-out forwards;
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            h1 {
+                font-size: 2rem;
+            }
+            .contenedor-juego {
+                padding: 15px;
+                width: 100%;
+            }
+            .marcador > div {
+                flex-basis: 48%; /* Dos por fila en móvil */
+                margin: 5px 0;
+            }
+            .tablero-numeros {
+                grid-template-columns: repeat(5, 1fr);
+                gap: 5px;
+                max-width: 100%;
+            }
+            .celda-numero {
+                font-size: 1.2rem;
+                padding: 10px;
+            }
+            
+            .multiples-indicador {
+                font-size: 0.9rem;
+                gap: 5px;
+            }
+            
+            .controles {
+                gap: 10px;
+            }
+            .controles select {
+                flex-basis: 100%;
+            }
+            .controles button {
+                flex-grow: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="contenedor-juego">
+        <h1>🌳 Bosque de Números 🌳</h1>
+
+        <p>Selecciona la dificultad y encuentra todos los resultados de la tabla en el bosque antes de quedarte sin vidas.</p>
+
+        <!-- Control de dificultad y Botones -->
+        <div class="controles">
+            <label for="select-nivel">Nivel de Dificultad:</label>
+            <select id="select-nivel">
+                <option value="principiante">Principiante (Tablas 2-9)</option>
+                <option value="avanzado">Avanzado (Tablas 10-19)</option>
+                <option value="pro">Pro (Tabla ALEATORIA 20-99)</option>
+            </select>
+        </div>
+
+        <div class="controles">
+            <button class="boton-iniciar" id="boton-iniciar" onclick="iniciarJuego()">Iniciar Juego</button>
+            
+            <!-- BOTÓN DE PISTA -->
+            <button class="boton-iniciar" id="boton-pista" onclick="activarPista()" style="background-color: #f0ad4e; box-shadow: 0 5px 0 #9d6c29; color: black;" disabled>
+                Pista (-20 Pts) 💡
+            </button>
+        </div>
+        
+        <!-- Marcadores actualizados -->
+        <div class="marcador">
+            <div id="marcador-tabla">Tabla: -</div>
+            <div id="marcador-puntos">Puntos: 0</div>
+            <!-- ESTE ES EL ELEMENTO TARGET PARA EL HUEVO DE PASCUA -->
+            <div id="marcador-tablas-realizadas">Tablas Realizadas: 0</div> 
+            <div id="marcador-racha">Racha: 0</div> 
+            <div id="marcador-record">Récord: 0</div>
+            <div id="marcador-vidas">Vidas: 
+                <span id="vidas-container">
+                    <span class="vida-icon">❤️</span>
+                    <span class="vida-icon">❤️</span>
+                    <span class="vida-icon">❤️</span>
+                </span>
+            </div>
+        </div>
+
+        <div class="tablero-numeros" id="tablero-numeros">
+            <!-- Las celdas se generarán aquí con JavaScript -->
+        </div>
+
+        <div class="mensaje" id="mensaje-juego">¡Selecciona un nivel y pulsa Iniciar!</div>
+        
+        <!-- Indicador de progreso de los múltiplos -->
+        <div class="multiples-indicador" id="multiples-indicador">
+            <!-- El contenido se genera con JS -->
+        </div>
+    </div>
+    
+    <!-- Modal para fin de juego -->
+    <div id="modal-final" class="modal">
+        <div class="modal-contenido">
+            <h2 id="modal-titulo">¡Fin del Juego!</h2>
+            <p id="modal-texto">Has conseguido X puntos.</p>
+            
+            <!-- Contenedor para botones específicos de Pro -->
+            <div id="modal-botones-pro" class="modal-botones-pro" style="display:none;">
+                <button onclick="cerrarModalYReiniciar(true)">Continuar con la Tabla ALEATORIA</button>
+                <button onclick="reiniciarJuegoTotalmente()">Seleccionar Nivel Diferente</button>
+            </div>
+            
+            <!-- Botón de reinicio estándar (visible por defecto) -->
+            <button id="boton-reiniciar-estandar" onclick="reiniciarJuegoTotalmente()">Jugar de Nuevo</button>
+        </div>
+    </div>
+
+
+    <script>
+        // Variables globales del juego
+        let targetTable = 0; 
+        let multiplesToFind = []; 
+        let foundCount = 0; 
+        let score = 0;
+        let lives = 3;
+        let roundActive = false;
+        
+        // VARIABLES DE RACHA Y PERSISTENCIA
+        let currentStreak = 0; // Racha actual de aciertos CONSECUTIVOS
+        let tablesCompleted = 0; // Contador de tablas realizadas
+        
+        // Key: Multiplicador (1-9), Value: {result: number, found: boolean}
+        let multipleStatuses = new Map(); 
+
+        // Variables de persistencia y récord (usando localStorage)
+        let highScore = 0;
+        const HIGH_SCORE_KEY = 'highScore'; 
+        
+        // --- LÓGICA DEL RECURSO DE PROGRAMADOR (HUEVO DE PASCUA) ---
+        let devClickCount = 0;
+        let devLastClickTime = 0;
+        const DEV_REQUIRED_CLICKS = 7;
+        const DEV_CLICK_TIMEOUT = 500; // ms
+        // -----------------------------------------------------------
+
+        // Constantes del juego
+        const BOARD_SIZE = 25; 
+        const MULTIPLES_TO_INCLUDE = 9; 
+        const MAX_MULTIPLE_VALUE = 99 * 9; 
+        const MAX_VALUE_PRINCIPANTE = 100; 
+        const MIN_TABLE_PRO = 20; 
+        const MAX_TABLE_PRO = 99;
+        
+        // CONSTANTES DE PUNTUACIÓN
+        const SCORE_BASE = {
+            'principiante': 10, // Puntos fijos por acierto
+            'avanzado': 15,
+            'pro': 20
+        };
+        // Multiplicador de Puntuación Progresiva: 0.5 puntos por cada unidad del número encontrado
+        const SCORE_MULTIPLIER = 0.5; 
+        
+        const STREAK_BONUS_PER_HIT = 5; 
+        const STREAK_THRESHOLD = 3; 
+        const STREAK_FIRE_THRESHOLD = 5; 
+
+        // Referencias a elementos del DOM
+        const tableroNumeros = document.getElementById('tablero-numeros');
+        const selectNivel = document.getElementById('select-nivel');
+        const botonIniciar = document.getElementById('boton-iniciar');
+        const botonPista = document.getElementById('boton-pista'); 
+        const marcadorTabla = document.getElementById('marcador-tabla');
+        const marcadorPuntos = document.getElementById('marcador-puntos');
+        const marcadorVidas = document.getElementById('marcador-vidas');
+        const marcadorRecord = document.getElementById('marcador-record');
+        const marcadorRacha = document.getElementById('marcador-racha'); 
+        const marcadorTablasRealizadas = document.getElementById('marcador-tablas-realizadas');
+        const mensajeJuego = document.getElementById('mensaje-juego');
+        const modalFinal = document.getElementById('modal-final');
+        const modalTitulo = document.getElementById('modal-titulo');
+        const modalTexto = document.getElementById('modal-texto');
+        const multiplesIndicador = document.getElementById('multiples-indicador');
+        
+        const modalBotonesPro = document.getElementById('modal-botones-pro'); 
+        const botonReiniciarEstandar = document.getElementById('boton-reiniciar-estandar'); 
+        
+        
+        // --- Lógica de Puntuación Alta (localStorage) ---
+
+        /**
+         * Carga la puntuación más alta del usuario desde localStorage.
+         */
+        function loadHighScore() {
+            try {
+                const storedScore = localStorage.getItem(HIGH_SCORE_KEY);
+                highScore = storedScore ? parseInt(storedScore, 10) : 0;
+            } catch (error) {
+                console.error("Error al cargar el récord de localStorage:", error);
+                highScore = 0; 
+            }
+            actualizarInterfaz();
+        }
+
+        /**
+         * Guarda la puntuación actual como récord si es mayor que la guardada, usando localStorage.
+         */
+        function saveHighScore() {
+            if (score > highScore) {
+                highScore = score;
+                actualizarInterfaz(); 
+                mensajeJuego.textContent = `¡NUEVO RÉCORD! Puntuación final: ${score} puntos.`;
+                
+                try {
+                    localStorage.setItem(HIGH_SCORE_KEY, highScore.toString());
+                } catch (error) {
+                    console.error("Error al guardar el récord en localStorage:", error);
+                }
+            }
+        }
+
+        // --- Lógica de Audio (Tone.js) ---
+        let correctSynth, incorrectSynth, winSynth; 
+
+        function initializeAudio() {
+            try {
+                // Solo iniciar el contexto si no está ya en ejecución o suspendido
+                if (Tone.context.state !== 'running') { Tone.start(); }
+                if (!correctSynth) {
+                    correctSynth = new Tone.Synth({
+                        oscillator: { type: 'sine' },
+                        envelope: { attack: 0.005, decay: 0.1, sustain: 0.05, release: 0.5, }
+                    }).toDestination();
+                }
+                if (!incorrectSynth) {
+                    incorrectSynth = new Tone.NoiseSynth({
+                        noise: { type: 'white' },
+                        envelope: { attack: 0.005, decay: 0.1, sustain: 0, release: 0.2, }
+                    }).toDestination();
+                }
+                if (!winSynth) {
+                    winSynth = new Tone.PluckSynth().toDestination();
+                }
+            } catch (error) {
+                console.error("Error initializing audio context:", error);
+            }
+        }
+        
+        function playCorrectSound() {
+            initializeAudio(); 
+            if (correctSynth) {
+                correctSynth.triggerAttackRelease('C5', '8n');
+                correctSynth.triggerAttackRelease('E5', '8n', Tone.now() + 0.1);
+            }
+        }
+
+        function playIncorrectSound() {
+            initializeAudio(); 
+            if (incorrectSynth) {
+                incorrectSynth.triggerAttackRelease('8n');
+            }
+        }
+        
+        function playWinSound() {
+            initializeAudio(); 
+            if (winSynth) {
+                const now = Tone.now();
+                winSynth.triggerAttackRelease('C5', '8n', now);
+                winSynth.triggerAttackRelease('E5', '8n', now + 0.1);
+                winSynth.triggerAttackRelease('G5', '8n', now + 0.2);
+                winSynth.triggerAttackRelease('C6', '4n', now + 0.3);
+            }
+        }
+
+        // --- Fin Lógica de Audio ---
+
+
+        /**
+         * Genera un efecto de estrellas o confeti saliendo del centro del modal.
+         */
+        function createStarBurst() {
+            const modalContent = modalFinal.querySelector('.modal-contenido');
+            
+            if (modalFinal.style.display !== 'flex') return;
+
+            const modalRect = modalContent.getBoundingClientRect();
+            const centerX = modalRect.left + modalRect.width / 2;
+            const centerY = modalRect.top + modalRect.height / 2;
+
+            const particleCount = 30;
+
+            for (let i = 0; i < particleCount; i++) {
+                const particle = document.createElement('div');
+                particle.classList.add('star-particle');
+
+                particle.style.left = `${centerX}px`;
+                particle.style.top = `${centerY}px`;
+                
+                const angle = Math.random() * 2 * Math.PI; 
+                const distance = Math.random() * 300 + 50; 
+                
+                const destX = Math.cos(angle) * distance;
+                const destY = Math.sin(angle) * distance;
+                
+                particle.style.setProperty('--tx', `${destX}px`);
+                particle.style.setProperty('--ty', `${destY}px`);
+                particle.style.setProperty('--r', `${Math.random() * 720}deg`); 
+                
+                particle.style.animationDelay = `${Math.random() * 0.3}s`;
+                
+                document.body.appendChild(particle);
+
+                setTimeout(() => {
+                    particle.remove();
+                }, 2000);
+            }
+        }
+
+
+        /**
+         * Determina la tabla objetivo basándose en el nivel seleccionado, 
+         * asegurando que no sea igual a la última tabla jugada (lastTable).
+         */
+        function getTargetTable(lastTable) {
+            const nivel = selectNivel.value;
+            let table;
+            
+            if (nivel === 'principiante') {
+                // Tablas 2 a 9
+                do {
+                    table = Math.floor(Math.random() * (9 - 2 + 1)) + 2;
+                } while (table === lastTable && (9 - 2 + 1) > 1);
+                return table;
+            } else if (nivel === 'avanzado') {
+                // Tablas 10 a 19
+                 do {
+                    table = Math.floor(Math.random() * (19 - 10 + 1)) + 10;
+                } while (table === lastTable && (19 - 10 + 1) > 1);
+                return table;
+            } else if (nivel === 'pro') {
+                // Tablas ALEATORIAS 20 a 99
+                do {
+                    table = Math.floor(Math.random() * (MAX_TABLE_PRO - MIN_TABLE_PRO + 1)) + MIN_TABLE_PRO;
+                } while (table === lastTable && (MAX_TABLE_PRO - MIN_TABLE_PRO + 1) > 1);
+                return table;
+            } else {
+                return null;
+            }
+        }
+
+        /**
+         * Inicializa o reinicia el estado de la RONDA. 
+         */
+        function iniciarRonda(isNewRound) {
+            
+            // 1. Si es un inicio de juego, resetear racha y contador de tablas.
+            if (!isNewRound) {
+                currentStreak = 0;
+                tablesCompleted = 0; 
+                targetTable = 0; 
+            } else {
+                // 2. Si es una continuación después de ganar, incrementar el contador
+                tablesCompleted++;
+            }
+            
+            // 3. Determinar la tabla (se le pasa el valor de la tabla anterior/actual para evitar repetición)
+            const newTable = getTargetTable(targetTable);
+
+            if (newTable === null) {
+                if (!isNewRound) { return; }
+                finDelJuego(false);
+                return;
+            }
+            
+            // 4. Asignar la nueva tabla
+            targetTable = newTable;
+            
+            foundCount = 0;
+            roundActive = true;
+            multiplesToFind = [];
+            multipleStatuses = new Map(); 
+
+            // Generar los múltiplos a encontrar (x1 a x9)
+            for (let i = 1; i <= MULTIPLES_TO_INCLUDE; i++) {
+                const multiple = targetTable * i;
+                const nivel = selectNivel.value;
+
+                if (nivel === 'principiante' && multiple > MAX_VALUE_PRINCIPANTE) {
+                    console.error("Error lógico: Múltiplo excede 100 en modo principiante.");
+                    finDelJuego(false); 
+                    return;
+                }
+                multiplesToFind.push(multiple);
+                
+                multipleStatuses.set(i, {
+                    result: multiple,
+                    found: false
+                });
+            }
+            
+            actualizarInterfaz();
+            generarTablero();
+            renderMultiplesIndicator(); 
+
+            if (isNewRound) {
+                mensajeJuego.textContent = `¡Tabla Completada! 🎯 ¡Siguiente! Encuentra los ${MULTIPLES_TO_INCLUDE} resultados de la tabla del ${targetTable} ahora.`;
+            } else {
+                mensajeJuego.textContent = `¡Encuentra los ${MULTIPLES_TO_INCLUDE} resultados de la tabla del ${targetTable} ahora!`;
+            }
+
+            selectNivel.disabled = true;
+            botonIniciar.disabled = true;
+            botonPista.disabled = false; // Habilitar la pista al iniciar la ronda
+        }
+        
+        /**
+         * Inicializa el JUEGO completo, reseteando puntuación y vidas.
+         */
+        function iniciarJuego() {
+            initializeAudio();
+
+            score = 0;
+            lives = 3;
+            iniciarRonda(false);
+        }
+
+        /**
+         * Implementa el botón de pista. Muestra la fórmula del siguiente múltiplo
+         * faltante y aplica una penalización de puntos.
+         */
+        function activarPista() {
+            if (!roundActive || score < 20) {
+                mensajeJuego.textContent = "¡Necesitas al menos 20 puntos para usar una pista!";
+                return;
+            }
+
+            // 1. Encontrar el primer múltiplo que falta
+            let missingMultiplier = null;
+            let missingResult = null;
+            for (let [multiplier, status] of multipleStatuses.entries()) {
+                if (!status.found) {
+                    missingMultiplier = multiplier;
+                    missingResult = status.result;
+                    break;
+                }
+            }
+            
+            if (missingMultiplier === null) {
+                mensajeJuego.textContent = "¡Ya has encontrado todos los resultados! No hay necesidad de pista.";
+                return;
+            }
+
+            // 2. Aplicar el coste de la pista
+            const COSTO_PISTA = 20;
+            score = Math.max(0, score - COSTO_PISTA);
+            
+            // 3. Mostrar la pista
+            mensajeJuego.innerHTML = `
+                💡 **PISTA (-${COSTO_PISTA} pts):** Estás buscando el resultado de la operación: 
+                <span style="color:var(--color-tablas);">${targetTable} x ${missingMultiplier}</span>. 
+                El número finaliza en **${missingResult % 10}**.
+            `;
+            
+            // Deshabilitar el botón de pista temporalmente para evitar spam
+            botonPista.disabled = true;
+            setTimeout(() => {
+                if(roundActive) botonPista.disabled = false;
+            }, 5000); // 5 segundos de cooldown
+
+            actualizarInterfaz();
+        }
+        
+        /**
+         * Configura el detector de clics para el Recurso de Programador.
+         */
+        function setupEasterEgg() {
+            const tablesDoneBox = document.getElementById('marcador-tablas-realizadas');
+
+            tablesDoneBox.addEventListener('click', () => {
+                const currentTime = Date.now();
+
+                // 1. Lógica de clics consecutivos
+                if (currentTime - devLastClickTime > DEV_CLICK_TIMEOUT) {
+                    devClickCount = 1; 
+                } else {
+                    devClickCount++;
+                }
+
+                devLastClickTime = currentTime;
+
+                // 2. Activación
+                if (devClickCount === DEV_REQUIRED_CLICKS) {
+                    activateProgrammerResource();
+                    devClickCount = 0; // Reset después de la activación
+                }
+            });
+        }
+
+        /**
+         * Activa el modo de recurso de programador, revelando la siguiente solución.
+         */
+        function activateProgrammerResource() {
+            if (!roundActive) {
+                mensajeJuego.textContent = "⚙️ El recurso no está disponible fuera de la ronda activa.";
+                return;
+            }
+
+            // 1. Encontrar el primer múltiplo que falta
+            let missingMultiplier = null;
+            let missingResult = null;
+            let missingCell = null;
+            
+            for (let [multiplier, status] of multipleStatuses.entries()) {
+                if (!status.found) {
+                    missingMultiplier = multiplier;
+                    missingResult = status.result;
+                    break;
+                }
+            }
+            
+            if (missingMultiplier === null) {
+                 mensajeJuego.textContent = "🎉 ¡No hay solución que revelar! ¡Ya ganaste la tabla!";
+                 return;
+            }
+            
+            // 2. Resaltar la celda correcta temporalmente
+            const allCells = tableroNumeros.querySelectorAll('.celda-numero');
+            allCells.forEach(cell => {
+                if (parseInt(cell.dataset.value) === missingResult) {
+                    missingCell = cell;
+                }
+            });
+            
+            if (missingCell) {
+                missingCell.classList.add('programmer-activated');
+                setTimeout(() => {
+                    missingCell.classList.remove('programmer-activated');
+                }, 3000); // 3 segundos de iluminación
+            }
+            
+            // 3. Aplicar efecto visual al marcador y mostrar mensaje
+            const tablesDoneBox = document.getElementById('marcador-tablas-realizadas');
+            tablesDoneBox.classList.add('programmer-activated');
+            setTimeout(() => {
+                tablesDoneBox.classList.remove('programmer-activated');
+            }, 3000);
+            
+            mensajeJuego.innerHTML = `
+                ✨ **RECURSO ACTIVADO** ✨ La solución es **${missingResult}** (${targetTable} x ${missingMultiplier}). 
+                <br> <span style="font-size: 0.8em; color: #D9534F;">cortesía de GEMINI + JCaselas</span>
+            `;
+        }
+
+
+        /**
+         * Genera la matriz de números (el "bosque").
+         */
+        function generarTablero() {
+            tableroNumeros.innerHTML = '';
+            
+            const numbers = [...multiplesToFind];
+            const decoyCount = BOARD_SIZE - MULTIPLES_TO_INCLUDE; 
+            
+            const maxVal = selectNivel.value === 'principiante' ? MAX_VALUE_PRINCIPANTE : MAX_MULTIPLE_VALUE;
+            
+            // --- LÓGICA DE DISTRACTORES INTELIGENTES ---
+            const smartDecoyCount = Math.floor(decoyCount / 2); 
+            const randomDecoyCount = decoyCount - smartDecoyCount; 
+            const smartDecoys = new Set();
+            
+            // Tablas cercanas (T-1 y T+1)
+            const nearbyTables = [];
+            if (targetTable > 1) {
+                nearbyTables.push(targetTable - 1);
+            }
+            if (targetTable + 1 <= MAX_TABLE_PRO) { 
+                 nearbyTables.push(targetTable + 1);
+            }
+            
+            // 1. Generar todos los posibles distractores inteligentes (múltiplos de tablas cercanas)
+            const possibleSmartDecoys = [];
+            nearbyTables.forEach(table => {
+                for (let i = 1; i <= 9; i++) {
+                    const result = table * i;
+                    const isValid = (
+                        result > 1 && 
+                        !multiplesToFind.includes(result) && 
+                        result <= maxVal 
+                    );
+
+                    if (isValid) {
+                        possibleSmartDecoys.push(result);
+                    }
+                }
+            });
+            
+            // 2. Elegir aleatoriamente la cantidad necesaria de distractores inteligentes
+            while (smartDecoys.size < smartDecoyCount && possibleSmartDecoys.length > 0) {
+                const index = Math.floor(Math.random() * possibleSmartDecoys.length);
+                smartDecoys.add(possibleSmartDecoys[index]);
+                possibleSmartDecoys.splice(index, 1); 
+            }
+            
+            // 3. Añadir los distractores inteligentes al array principal de números
+            numbers.push(...Array.from(smartDecoys));
+            
+            // --- LÓGICA DE DISTRACTORES ALEATORIOS RESTANTE ---
+            for (let i = 0; i < randomDecoyCount; i++) {
+                let decoy;
+                do {
+                    decoy = Math.floor(Math.random() * (maxVal - 1)) + 2; 
+                } while (numbers.includes(decoy)); 
+                
+                numbers.push(decoy);
+            }
+            // --- FIN NUEVA LÓGICA DE DISTRACTORES ---
+
+            // Mezclar el array (Algoritmo Fisher-Yates)
+            for (let i = numbers.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [numbers[i], numbers[j]] = [numbers[j], numbers[i]];
+            }
+
+            // Crear las celdas en el DOM
+            numbers.forEach(number => {
+                const celda = document.createElement('div');
+                celda.classList.add('celda-numero');
+                celda.textContent = number;
+                celda.dataset.value = number;
+                celda.addEventListener('click', manejarClicCelda);
+                tableroNumeros.appendChild(celda);
+            });
+        }
+        
+        /**
+         * Renderiza el indicador de múltiplos encontrados/faltantes.
+         */
+        function renderMultiplesIndicator() {
+            if (!multiplesIndicador) return;
+
+            let html = '';
+            
+            multipleStatuses.forEach((status, multiplier) => {
+                const formula = `${targetTable}x${multiplier}=`;
+                const text = status.found ? 
+                    `${formula}${status.result} ✔️` : 
+                    `${formula}?`;
+                
+                const cssClass = status.found ? 'found' : 'missing';
+                
+                html += `<div class="multiple-item ${cssClass}">${text}</div>`;
+            });
+
+            multiplesIndicador.innerHTML = html;
+        }
+
+
+        /**
+         * Maneja el clic del usuario en una celda.
+         */
+        function manejarClicCelda(event) {
+            if (!roundActive) return;
+
+            const celda = event.currentTarget;
+            const clickedNumber = parseInt(celda.dataset.value);
+            const nivel = selectNivel.value;
+            let puntosGanados = 0;
+            let mensajeAdicional = '';
+
+            if (multiplesToFind.includes(clickedNumber)) {
+                // ACERTO
+                if (!celda.classList.contains('acertado')) {
+                    
+                    // --- LÓGICA DE PUNTUACIÓN PROGRESIVA ---
+                    
+                    // 1. PUNTUACIÓN BASE POR NIVEL
+                    const base = SCORE_BASE[nivel] || 10;
+                    
+                    // 2. PUNTUACIÓN PROGRESIVA (depende del tamaño del número)
+                    const progressive = Math.floor(clickedNumber * SCORE_MULTIPLIER); 
+                    
+                    // Puntuación antes del bono de racha
+                    const scoreBeforeStreak = base + progressive;
+                    puntosGanados += scoreBeforeStreak;
+                    
+                    // 3. BONUS POR RACHA (racha de aciertos CONSECUTIVOS)
+                    currentStreak++;
+                    let bonus = 0;
+                    if (currentStreak >= STREAK_THRESHOLD) {
+                        bonus = (currentStreak - STREAK_THRESHOLD + 1) * STREAK_BONUS_PER_HIT;
+                        puntosGanados += bonus;
+                        mensajeAdicional = ` (Racha x${currentStreak}: +${bonus} pts) 🌟`;
+                    }
+                    
+                    score += puntosGanados;
+                    celda.classList.add('acertado');
+                    foundCount++;
+
+                    mensajeJuego.textContent = `¡Correcto! ${clickedNumber} (+${puntosGanados} pts | Base: ${base}, Prog: ${progressive})${mensajeAdicional}`;
+                    
+                    // --- FIN LÓGICA DE PUNTUACIÓN PROGRESIVA ---
+                    
+                    playCorrectSound();
+                    
+                    // Marcar el estatus en el mapa
+                    for (let [multiplier, status] of multipleStatuses.entries()) {
+                        if (status.result === clickedNumber && !status.found) {
+                            status.found = true;
+                            break; 
+                        }
+                    }
+                    
+                    renderMultiplesIndicator(); 
+                    
+                    // Asegurarse de que el botón de pista esté habilitado si se tiene suficiente puntuación
+                    if (score >= 20) {
+                        botonPista.disabled = false;
+                    }
+
+                    if (foundCount === MULTIPLES_TO_INCLUDE) {
+                        handleRoundWin();
+                    }
+                }
+            } else {
+                // FALLO
+                if (!celda.classList.contains('incorrecto')) {
+                    celda.classList.add('incorrecto');
+                    lives--;
+                    
+                    // La racha SÍ se resetea a 0 al fallar
+                    currentStreak = 0; 
+                    
+                    mensajeJuego.textContent = `¡Incorrecto! Pierdes una vida. Racha de puntos reseteada.`;
+                    
+                    playIncorrectSound();
+
+                    setTimeout(() => celda.classList.remove('incorrecto'), 500); 
+
+                    if (lives <= 0) {
+                        finDelJuego(false); 
+                    }
+                }
+            }
+
+            actualizarInterfaz();
+        }
+
+        /**
+         * Maneja la finalización exitosa de una ronda (se encontraron todos los múltiplos).
+         */
+        function handleRoundWin() {
+            roundActive = false;
+            currentStreak = 0; // Se resetea la racha al ganar la ronda
+            botonPista.disabled = true; // Deshabilitar la pista
+            
+            // Si el modo es 'pro', mostramos modal con opciones para seguir
+            if (selectNivel.value === 'pro') {
+                modalTitulo.textContent = `¡Tabla ${targetTable} Completada! 🎉`;
+                modalTexto.textContent = `¡Felicidades! Has encontrado los ${MULTIPLES_TO_INCLUDE} resultados. Puntuación: ${score}. Tablas completadas: ${tablesCompleted + 1}. ¿Qué quieres hacer ahora?`;
+                
+                modalBotonesPro.style.display = 'flex'; 
+                botonReiniciarEstandar.style.display = 'none'; 
+                
+                playWinSound(); 
+                setTimeout(createStarBurst, 50); 
+                modalFinal.style.display = 'flex';
+                
+            } else {
+                // Modo Principiante/Avanzado: Continuar automáticamente con nueva tabla
+                 mensajeJuego.textContent = `¡Tabla ${targetTable} Completada! 🏆 Preparando la siguiente...`;
+                 setTimeout(() => iniciarRonda(true), 1500); 
+            }
+        }
+
+
+        /**
+         * Actualiza el marcador de puntos, tabla, vidas, racha, tablas realizadas y récord en la interfaz.
+         */
+        function actualizarInterfaz() {
+            marcadorTabla.textContent = `Tabla: ${targetTable > 0 ? targetTable : '-'}`;
+            marcadorPuntos.textContent = `Puntos: ${score}`;
+            marcadorTablasRealizadas.textContent = `Tablas Realizadas: ${tablesCompleted}`;
+            marcadorRecord.textContent = `Récord: ${highScore}`;
+            
+            // Actualizar marcador de racha con indicador de fuego
+            let streakText = `Racha: ${currentStreak}`;
+            if (currentStreak >= STREAK_FIRE_THRESHOLD) {
+                streakText += ' <span class="fuego-racha">🔥</span>';
+            }
+            marcadorRacha.innerHTML = streakText;
+            
+            // Control de deshabilitación del botón de pista por falta de puntos
+            if (score < 20 && roundActive) {
+                botonPista.disabled = true;
+                botonPista.textContent = `Pista (Mín 20 Pts)`;
+            } else if (roundActive) {
+                // Solo cambiar el texto si está habilitado por la ronda
+                botonPista.textContent = `Pista (-20 Pts) 💡`;
+            }
+
+
+            const vidasContainer = document.getElementById('vidas-container');
+            if (vidasContainer) {
+                 vidasContainer.innerHTML = '';
+                for (let i = 0; i < 3; i++) {
+                    const icon = document.createElement('span');
+                    icon.classList.add('vida-icon');
+                    icon.textContent = i < lives ? '❤️' : '🖤';
+                    vidasContainer.appendChild(icon);
+                }
+            }
+        }
+
+        /**
+         * Maneja el fin del juego (derrota).
+         */
+        function finDelJuego(won) {
+            roundActive = false;
+            currentStreak = 0;
+            saveHighScore(); 
+
+            // Habilitar controles
+            selectNivel.disabled = false;
+            botonIniciar.disabled = false;
+            botonPista.disabled = true; // Deshabilitar la pista al finalizar
+            
+            // Deshabilitar todas las celdas
+            tableroNumeros.querySelectorAll('.celda-numero').forEach(celda => {
+                celda.classList.add('deshabilitado');
+            });
+            
+            // Mostrar modal de derrota
+            modalTitulo.textContent = '¡FIN DEL JUEGO! 💀';
+            modalTexto.textContent = `Te has quedado sin vidas. Puntuación final: ${score} puntos. Tablas completadas: ${tablesCompleted}.`;
+
+            modalBotonesPro.style.display = 'none'; 
+            botonReiniciarEstandar.style.display = 'block'; 
+            
+            modalFinal.style.display = 'flex';
+            actualizarInterfaz();
+        }
+
+        /**
+         * Cierra el modal y reinicia la ronda o el juego completamente.
+         */
+        function cerrarModalYReiniciar(continueSameTable = false) {
+            modalFinal.style.display = 'none';
+            
+            if (selectNivel.value === 'pro' && continueSameTable) {
+                // En modo PRO, si gana y elige continuar, se inicia una nueva ronda.
+                iniciarRonda(true); 
+                
+            } else {
+                // Reiniciar el juego totalmente (limpiar UI, resetear variables)
+                tableroNumeros.innerHTML = '';
+                multiplesIndicador.innerHTML = ''; 
+                mensajeJuego.textContent = '¡Selecciona un nivel y pulsa Iniciar!';
+                
+                // Reset de variables del juego
+                targetTable = 0;
+                score = 0;
+                lives = 3;
+                currentStreak = 0;
+                tablesCompleted = 0; 
+                botonPista.disabled = true; 
+                botonPista.textContent = `Pista (-20 Pts) 💡`;
+
+
+                actualizarInterfaz();
+            }
+        }
+        
+        /**
+         * Función para forzar el reinicio completo del juego.
+         */
+        function reiniciarJuegoTotalmente() {
+            cerrarModalYReiniciar(false);
+        }
+
+        // Inicialización al cargar la página
+        window.onload = function() {
+            loadHighScore(); 
+            actualizarInterfaz();
+            setupEasterEgg(); // Inicializar el detector de clics del huevo de pascua
+        };
+
+    </script>
+
+</body>
+</html>
