@@ -1,23 +1,26 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bosque de Números: El Juego de las Tablas</title>
-    <link rel="manifest" href="manifest.json">
-    <script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bosque de Números: El Juego de las Tablas</title>
+
+  <!-- Incluimos Tone.js -->
+  <script src="Tone.min.js"></script>
+
+  <!-- Manifest y Service Worker -->
+  <link rel="manifest" href="manifest.json">
+  <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
-        navigator.serviceWorker.register("service-worker.js")
-          .then(() => console.log("Service Worker registrado correctamente."))
-          .catch((err) => console.error("Error al registrar Service Worker:", err));
+        navigator.serviceWorker.register("service-worker.js");
       });
     }
-    <!-- Incluimos Tone.js -->
-<script src="Tone.min.js"></script>    
-    <style>
-        /* Estilos generales y fuente temática */
-        @import url('https://fonts.googleapis.com/css2?family=Crete+Round&family=Varela+Round&display=swap');
+  </script>
+
+  <style>
+    /* Estilos generales y fuente temática */
+    @import url('https://fonts.googleapis.com/css2?family=Crete+Round&family=Varela+Round&display=swap');
 
         :root {
             --color-fondo-bosque: #F7EFE5;
@@ -1340,6 +1343,7 @@
 
 </body>
 </html>
+
 
 
 
